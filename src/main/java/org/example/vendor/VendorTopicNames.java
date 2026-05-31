@@ -10,6 +10,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class VendorTopicNames {
 
+    /** REST/Kafka ingestion topics (separate from callback dispatch topics which use {@code queue_name} as-is). */
+    private static final String INGEST_SUFFIX = ".ingest";
     private static final String RETRY_SUFFIX = ".retry";
     private static final String DLQ_SUFFIX = ".dlq";
 
@@ -28,6 +30,11 @@ public class VendorTopicNames {
     }
 
     public String rawTopic(VendorCallbackQueueConfig config) {
+        return config.getQueueName() + INGEST_SUFFIX;
+    }
+
+    /** Kafka topic for DB row callback dispatch (matches {@code vendor_callback_queue_config.queue_name}). */
+    public String callbackDispatchTopic(VendorCallbackQueueConfig config) {
         return config.getQueueName();
     }
 
@@ -51,7 +58,8 @@ public class VendorTopicNames {
         for (VendorCallbackQueueConfig config : configRepository.findActive()) {
             if (rawTopic(config).equals(topic)
                     || retryTopic(config).equals(topic)
-                    || dlqTopic(config).equals(topic)) {
+                    || dlqTopic(config).equals(topic)
+                    || callbackDispatchTopic(config).equals(topic)) {
                 return config.getVendorName();
             }
         }

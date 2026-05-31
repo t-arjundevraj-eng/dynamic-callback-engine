@@ -12,6 +12,17 @@ public class QueueRowStateTransitionService {
         if (result.isSuccess()) {
             return new QueueRowStateUpdate(rowId, ProcessStatus.COMPLETED, currentRetryCount);
         }
+        return onFailure(rowId, currentRetryCount, maxRetryCount);
+    }
+
+    public QueueRowStateUpdate onKafkaPublishResult(long rowId, int currentRetryCount, int maxRetryCount, DispatchResult result) {
+        if (result.isSuccess()) {
+            return new QueueRowStateUpdate(rowId, ProcessStatus.PUBLISHED, currentRetryCount);
+        }
+        return onFailure(rowId, currentRetryCount, maxRetryCount);
+    }
+
+    private QueueRowStateUpdate onFailure(long rowId, int currentRetryCount, int maxRetryCount) {
         int nextRetryCount = currentRetryCount + 1;
         if (nextRetryCount < maxRetryCount) {
             return new QueueRowStateUpdate(rowId, ProcessStatus.RETRY, nextRetryCount);

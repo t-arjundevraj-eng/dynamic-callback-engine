@@ -10,6 +10,7 @@ import org.example.callback.dto.CallbackHttpMethod;
 import org.example.callback.dto.ResolvedVendorConfiguration;
 import org.example.callback.dto.VendorConfigurationRow;
 import org.example.callback.dto.VendorParamDefinition;
+import org.example.callback.repository.VendorCallbackSourceTableProvisioner;
 import org.example.callback.repository.VendorConfigurationJdbcRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,14 +26,17 @@ public class VendorConfigurationResolver {
     private static final Logger log = LoggerFactory.getLogger(VendorConfigurationResolver.class);
 
     private final VendorConfigurationJdbcRepository configurationRepository;
+    private final VendorCallbackSourceTableProvisioner sourceTableProvisioner;
     private final VendorCallbackProperties properties;
     private final AtomicReference<List<ResolvedVendorConfiguration>> cache =
             new AtomicReference<List<ResolvedVendorConfiguration>>(new ArrayList<ResolvedVendorConfiguration>());
 
     public VendorConfigurationResolver(
             VendorConfigurationJdbcRepository configurationRepository,
+            VendorCallbackSourceTableProvisioner sourceTableProvisioner,
             VendorCallbackProperties properties) {
         this.configurationRepository = configurationRepository;
+        this.sourceTableProvisioner = sourceTableProvisioner;
         this.properties = properties;
     }
 
@@ -53,6 +57,8 @@ public class VendorConfigurationResolver {
 
         for (VendorConfigurationRow row : rows) {
             try {
+                sourceTableProvisioner.ensureSourceTable(
+                        row.getVendorId(), row.getSourceTableName(), row.getCircle());
                 resolved.add(buildResolvedConfiguration(row));
             } catch (Exception ex) {
                 log.warn("Skipping invalid vendor configuration vendorId={}, circle={}, queueId={}: {}",

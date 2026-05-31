@@ -118,60 +118,83 @@ CREATE TABLE IF NOT EXISTS sm_vendor_ip_mapping (
     KEY idx_vendor_ip (vendor_id)
 );
 
-CREATE TABLE IF NOT EXISTS vendor_a_events (
+-- Source queue for one97 / tanzania (table_name from vendor_callback_queue_config)
+CREATE TABLE IF NOT EXISTS vendor_callback_queue_one97_tanzania (
     id BIGINT NOT NULL AUTO_INCREMENT,
-    eventId varchar(120) NOT NULL,
-    customerId varchar(120) NOT NULL,
-    amount decimal(18, 2) NOT NULL,
-    operator_id varchar(50) NOT NULL,
-    pack_id varchar(50) NOT NULL,
-    process_status varchar(20) NOT NULL DEFAULT 'NEW',
-    retry_count int(11) NOT NULL DEFAULT 0,
+    process_status VARCHAR(20) NOT NULL DEFAULT 'NEW',
+    retry_count INT NOT NULL DEFAULT 0,
+    operator_id VARCHAR(50) NOT NULL,
+    pack_id VARCHAR(50) NOT NULL,
+    event_id VARCHAR(120) NULL,
+    customer_id VARCHAR(120) NULL,
+    amount VARCHAR(64) NULL,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_vendor_a_events_eventId (eventId),
-    KEY idx_vendor_a_events_process_status (process_status)
-);
+    KEY idx_vendor_callback_queue_one97_tanzania_process_status (process_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-CREATE TABLE IF NOT EXISTS vendor_b_events (
+-- Source queue for paytmchemba (table_name from vendor_callback_queue_config)
+CREATE TABLE IF NOT EXISTS vendor_callback_queue_paytmchemba (
     id BIGINT NOT NULL AUTO_INCREMENT,
-    messageId varchar(120) NOT NULL,
-    accountNumber varchar(120) NOT NULL,
-    status varchar(50) NOT NULL,
-    process_status varchar(20) NOT NULL DEFAULT 'NEW',
-    retry_count int(11) NOT NULL DEFAULT 0,
+    process_status VARCHAR(20) NOT NULL DEFAULT 'NEW',
+    retry_count INT NOT NULL DEFAULT 0,
+    operator_id VARCHAR(50) NOT NULL,
+    pack_id VARCHAR(50) NOT NULL,
+    transaction_id VARCHAR(120) NULL,
+    msisdn VARCHAR(32) NULL,
+    amount VARCHAR(64) NULL,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_vendor_b_events_messageId (messageId),
-    KEY idx_vendor_b_events_process_status (process_status)
-);
+    KEY idx_vendor_callback_queue_paytmchemba_process_status (process_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 INSERT IGNORE INTO vendor_callback_queue_config
 (queue_name, cons_pool_size, prod_block_queue_size, cons_block_queue_size, fetch_size,
  producer_sleep_time, consumer_sleep_time, status, refetch_interval, vendor_circle_flag,
  vendor_name, circle_name, max_retry_count, table_name)
 VALUES
-('vendor-a.raw', 12, 1000, 1000, 500, 5000, 60000, 1, 1, 0, 'vendor-a', NULL, 3, 'vendor_a_events'),
-('vendor-b.raw', 12, 1000, 1000, 500, 60000, 60000, 1, 1, 0, 'vendor-b', NULL, 3, 'vendor_b_events');
+('queue_callback_one97', 12, 1000, 1000, 50, 5000, 60000, 1, 1, 1, 'one97', 'tanzania', 3,
+ 'vendor_callback_queue_one97_tanzania'),
+('queue_callback_paytmchemba', 12, 1000, 1000, 50, 5000, 60000, 1, 1, 0, 'paytmchemba', NULL, 3,
+ 'vendor_callback_queue_paytmchemba');
 
-INSERT IGNORE INTO sm_vendor_master (vendor_name, isCallbackActive) VALUES ('vendor-a', 1);
+INSERT IGNORE INTO sm_vendor_master (vendor_name, isCallbackActive) VALUES ('one97', 1);
+INSERT IGNORE INTO sm_vendor_master (vendor_name, isCallbackActive) VALUES ('paytmchemba', 1);
 
 INSERT IGNORE INTO sm_vendor_operator_mapping (vendor_id, operator_id)
-SELECT vendor_id, 'OP1' FROM sm_vendor_master WHERE vendor_name = 'vendor-a';
+SELECT vendor_id, 'OP1' FROM sm_vendor_master WHERE vendor_name = 'one97';
+INSERT IGNORE INTO sm_vendor_operator_mapping (vendor_id, operator_id)
+SELECT vendor_id, 'OP1' FROM sm_vendor_master WHERE vendor_name = 'paytmchemba';
 
 INSERT IGNORE INTO sm_vendor_pack (vendor_id, pack_id, isactive)
-SELECT vendor_id, 'PACK1', 1 FROM sm_vendor_master WHERE vendor_name = 'vendor-a';
+SELECT vendor_id, 'PACK1', 1 FROM sm_vendor_master WHERE vendor_name = 'one97';
+INSERT IGNORE INTO sm_vendor_pack (vendor_id, pack_id, isactive)
+SELECT vendor_id, 'PACK1', 1 FROM sm_vendor_master WHERE vendor_name = 'paytmchemba';
+
+INSERT IGNORE INTO sm_vendor_callback_config (vendor_id, circle, callback_url, channel_url, http_method)
+SELECT vendor_id, 'tanzania', 'http://localhost:8080/actuator/health', NULL, 'GET'
+FROM sm_vendor_master WHERE vendor_name = 'one97';
 
 INSERT IGNORE INTO sm_vendor_callback_config (vendor_id, circle, callback_url, channel_url, http_method)
 SELECT vendor_id, 'default', 'http://localhost:8080/actuator/health', NULL, 'GET'
-FROM sm_vendor_master WHERE vendor_name = 'vendor-a';
+FROM sm_vendor_master WHERE vendor_name = 'paytmchemba';
 
 INSERT IGNORE INTO sm_vendor_param_configuration (vendor_id, circle, param_key, source_field, is_required)
-SELECT vendor_id, 'default', 'eventId', 'eventId', 1 FROM sm_vendor_master WHERE vendor_name = 'vendor-a';
+SELECT vendor_id, 'tanzania', 'event_id', 'event_id', 1 FROM sm_vendor_master WHERE vendor_name = 'one97';
+INSERT IGNORE INTO sm_vendor_param_configuration (vendor_id, circle, param_key, source_field, is_required)
+SELECT vendor_id, 'tanzania', 'customer_id', 'customer_id', 1 FROM sm_vendor_master WHERE vendor_name = 'one97';
+INSERT IGNORE INTO sm_vendor_param_configuration (vendor_id, circle, param_key, source_field, is_required)
+SELECT vendor_id, 'tanzania', 'amount', 'amount', 1 FROM sm_vendor_master WHERE vendor_name = 'one97';
 
 INSERT IGNORE INTO sm_vendor_param_configuration (vendor_id, circle, param_key, source_field, is_required)
-SELECT vendor_id, 'default', 'customerId', 'customerId', 1 FROM sm_vendor_master WHERE vendor_name = 'vendor-a';
-
+SELECT vendor_id, 'default', 'transaction_id', 'transaction_id', 1 FROM sm_vendor_master WHERE vendor_name = 'paytmchemba';
 INSERT IGNORE INTO sm_vendor_param_configuration (vendor_id, circle, param_key, source_field, is_required)
-SELECT vendor_id, 'default', 'amount', 'amount', 1 FROM sm_vendor_master WHERE vendor_name = 'vendor-a';
+SELECT vendor_id, 'default', 'msisdn', 'msisdn', 1 FROM sm_vendor_master WHERE vendor_name = 'paytmchemba';
+INSERT IGNORE INTO sm_vendor_param_configuration (vendor_id, circle, param_key, source_field, is_required)
+SELECT vendor_id, 'default', 'amount', 'amount', 1 FROM sm_vendor_master WHERE vendor_name = 'paytmchemba';
 
-INSERT IGNORE INTO vendor_a_events (eventId, customerId, amount, operator_id, pack_id, process_status, retry_count)
-VALUES ('evt-demo-1', 'cust-100', 99.50, 'OP1', 'PACK1', 'NEW', 0);
+INSERT IGNORE INTO vendor_callback_queue_one97_tanzania
+(process_status, retry_count, operator_id, pack_id, event_id, customer_id, amount)
+VALUES ('NEW', 0, 'OP1', 'PACK1', 'evt-one97-1', 'cust-100', '99.50');
+
+INSERT IGNORE INTO vendor_callback_queue_paytmchemba
+(process_status, retry_count, operator_id, pack_id, transaction_id, msisdn, amount)
+VALUES ('NEW', 0, 'OP1', 'PACK1', 'txn-paytm-1', '255700000001', '1500.00');

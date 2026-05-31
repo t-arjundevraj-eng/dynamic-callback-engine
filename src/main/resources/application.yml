@@ -4,6 +4,7 @@ server:
 app:
   vendor-callback:
     enabled: true
+    dispatch-via-kafka: true
     connect-timeout-ms: 5000
     read-timeout-ms: 30000
     scheduler-pool-size: 20

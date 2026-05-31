@@ -4,6 +4,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.example.messaging.TelemetryEvent;
+import org.example.messaging.VendorCallbackQueueMessage;
 import org.example.messaging.VendorEvent;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -13,7 +14,13 @@ import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.kafka.core.ConsumerFactory;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.core.ProducerFactory;
+import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.listener.ContainerProperties;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 
@@ -59,6 +66,20 @@ public class KafkaConfig {
         props.put(JsonDeserializer.VALUE_DEFAULT_TYPE, VendorEvent.class.getName());
         props.put(JsonDeserializer.TRUSTED_PACKAGES, "org.example.messaging,java.util");
         return new DefaultKafkaConsumerFactory<>(props);
+    }
+
+    @Bean
+    ProducerFactory<String, VendorCallbackQueueMessage> vendorCallbackProducerFactory(KafkaProperties kafkaProperties) {
+        java.util.Map<String, Object> props = kafkaProperties.buildProducerProperties();
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        return new DefaultKafkaProducerFactory<>(props);
+    }
+
+    @Bean
+    KafkaTemplate<String, VendorCallbackQueueMessage> vendorCallbackKafkaTemplate(
+            ProducerFactory<String, VendorCallbackQueueMessage> vendorCallbackProducerFactory) {
+        return new KafkaTemplate<>(vendorCallbackProducerFactory);
     }
 
 }

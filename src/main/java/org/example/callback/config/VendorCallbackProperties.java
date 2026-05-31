@@ -6,6 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class VendorCallbackProperties {
 
     private boolean enabled = true;
+    private boolean dispatchViaKafka = true;
     private int connectTimeoutMs = 5_000;
     private int readTimeoutMs = 30_000;
     private int schedulerPoolSize = 20;
@@ -21,6 +22,14 @@ public class VendorCallbackProperties {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public boolean isDispatchViaKafka() {
+        return dispatchViaKafka;
+    }
+
+    public void setDispatchViaKafka(boolean dispatchViaKafka) {
+        this.dispatchViaKafka = dispatchViaKafka;
     }
 
     public int getConnectTimeoutMs() {
