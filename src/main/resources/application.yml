@@ -2,6 +2,16 @@ server:
   port: 8080
 
 app:
+  vendor-callback:
+    enabled: true
+    connect-timeout-ms: 5000
+    read-timeout-ms: 30000
+    scheduler-pool-size: 20
+    config-refresh-ms: 60000
+    default-producer-sleep-ms: 1000
+    dispatch-core-pool-size: 50
+    dispatch-max-pool-size: 100
+    dispatch-queue-capacity: 1000
   kafka:
     topic: high-throughput-events
     partitions: 48

@@ -63,18 +63,85 @@ CREATE TABLE IF NOT EXISTS vendor_callback_queue_config (
   UNIQUE KEY table_name (table_name)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
+CREATE TABLE IF NOT EXISTS sm_vendor_master (
+    vendor_id INT NOT NULL AUTO_INCREMENT,
+    vendor_name VARCHAR(50) NOT NULL,
+    isCallbackActive TINYINT(1) NOT NULL DEFAULT 0,
+    PRIMARY KEY (vendor_id),
+    UNIQUE KEY uk_sm_vendor_master_name (vendor_name)
+);
+
+CREATE TABLE IF NOT EXISTS sm_vendor_operator_mapping (
+    id INT NOT NULL AUTO_INCREMENT,
+    vendor_id INT NOT NULL,
+    operator_id VARCHAR(50) NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_vendor_operator (vendor_id, operator_id)
+);
+
+CREATE TABLE IF NOT EXISTS sm_vendor_pack (
+    id INT NOT NULL AUTO_INCREMENT,
+    vendor_id INT NOT NULL,
+    pack_id VARCHAR(50) NOT NULL,
+    isactive TINYINT(1) NOT NULL DEFAULT 1,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_vendor_pack (vendor_id, pack_id)
+);
+
+CREATE TABLE IF NOT EXISTS sm_vendor_param_configuration (
+    id INT NOT NULL AUTO_INCREMENT,
+    vendor_id INT NOT NULL,
+    circle VARCHAR(50) DEFAULT NULL,
+    param_key VARCHAR(100) NOT NULL,
+    source_field VARCHAR(100) NOT NULL,
+    is_required TINYINT(1) NOT NULL DEFAULT 1,
+    PRIMARY KEY (id),
+    KEY idx_vendor_param (vendor_id, circle)
+);
+
+CREATE TABLE IF NOT EXISTS sm_vendor_callback_config (
+    id INT NOT NULL AUTO_INCREMENT,
+    vendor_id INT NOT NULL,
+    circle VARCHAR(50) DEFAULT NULL,
+    callback_url VARCHAR(512) NOT NULL,
+    channel_url VARCHAR(512) DEFAULT NULL,
+    http_method VARCHAR(10) NOT NULL DEFAULT 'POST',
+    PRIMARY KEY (id),
+    KEY idx_vendor_callback (vendor_id, circle)
+);
+
+CREATE TABLE IF NOT EXISTS sm_vendor_ip_mapping (
+    id INT NOT NULL AUTO_INCREMENT,
+    vendor_id INT NOT NULL,
+    ip_address VARCHAR(45) NOT NULL,
+    PRIMARY KEY (id),
+    KEY idx_vendor_ip (vendor_id)
+);
+
 CREATE TABLE IF NOT EXISTS vendor_a_events (
+    id BIGINT NOT NULL AUTO_INCREMENT,
     eventId varchar(120) NOT NULL,
     customerId varchar(120) NOT NULL,
     amount decimal(18, 2) NOT NULL,
-    PRIMARY KEY (eventId)
+    operator_id varchar(50) NOT NULL,
+    pack_id varchar(50) NOT NULL,
+    process_status varchar(20) NOT NULL DEFAULT 'NEW',
+    retry_count int(11) NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_vendor_a_events_eventId (eventId),
+    KEY idx_vendor_a_events_process_status (process_status)
 );
 
 CREATE TABLE IF NOT EXISTS vendor_b_events (
+    id BIGINT NOT NULL AUTO_INCREMENT,
     messageId varchar(120) NOT NULL,
     accountNumber varchar(120) NOT NULL,
     status varchar(50) NOT NULL,
-    PRIMARY KEY (messageId)
+    process_status varchar(20) NOT NULL DEFAULT 'NEW',
+    retry_count int(11) NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_vendor_b_events_messageId (messageId),
+    KEY idx_vendor_b_events_process_status (process_status)
 );
 
 INSERT IGNORE INTO vendor_callback_queue_config
@@ -82,5 +149,29 @@ INSERT IGNORE INTO vendor_callback_queue_config
  producer_sleep_time, consumer_sleep_time, status, refetch_interval, vendor_circle_flag,
  vendor_name, circle_name, max_retry_count, table_name)
 VALUES
-('vendor-a.raw', 12, 1000, 1000, 500, 60000, 60000, 1, 1, 0, 'vendor-a', NULL, 3, 'vendor_a_events'),
+('vendor-a.raw', 12, 1000, 1000, 500, 5000, 60000, 1, 1, 0, 'vendor-a', NULL, 3, 'vendor_a_events'),
 ('vendor-b.raw', 12, 1000, 1000, 500, 60000, 60000, 1, 1, 0, 'vendor-b', NULL, 3, 'vendor_b_events');
+
+INSERT IGNORE INTO sm_vendor_master (vendor_name, isCallbackActive) VALUES ('vendor-a', 1);
+
+INSERT IGNORE INTO sm_vendor_operator_mapping (vendor_id, operator_id)
+SELECT vendor_id, 'OP1' FROM sm_vendor_master WHERE vendor_name = 'vendor-a';
+
+INSERT IGNORE INTO sm_vendor_pack (vendor_id, pack_id, isactive)
+SELECT vendor_id, 'PACK1', 1 FROM sm_vendor_master WHERE vendor_name = 'vendor-a';
+
+INSERT IGNORE INTO sm_vendor_callback_config (vendor_id, circle, callback_url, channel_url, http_method)
+SELECT vendor_id, 'default', 'http://localhost:8080/actuator/health', NULL, 'GET'
+FROM sm_vendor_master WHERE vendor_name = 'vendor-a';
+
+INSERT IGNORE INTO sm_vendor_param_configuration (vendor_id, circle, param_key, source_field, is_required)
+SELECT vendor_id, 'default', 'eventId', 'eventId', 1 FROM sm_vendor_master WHERE vendor_name = 'vendor-a';
+
+INSERT IGNORE INTO sm_vendor_param_configuration (vendor_id, circle, param_key, source_field, is_required)
+SELECT vendor_id, 'default', 'customerId', 'customerId', 1 FROM sm_vendor_master WHERE vendor_name = 'vendor-a';
+
+INSERT IGNORE INTO sm_vendor_param_configuration (vendor_id, circle, param_key, source_field, is_required)
+SELECT vendor_id, 'default', 'amount', 'amount', 1 FROM sm_vendor_master WHERE vendor_name = 'vendor-a';
+
+INSERT IGNORE INTO vendor_a_events (eventId, customerId, amount, operator_id, pack_id, process_status, retry_count)
+VALUES ('evt-demo-1', 'cust-100', 99.50, 'OP1', 'PACK1', 'NEW', 0);
