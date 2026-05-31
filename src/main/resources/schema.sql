@@ -1,0 +1,86 @@
+CREATE TABLE IF NOT EXISTS consumed_events (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    event_id VARCHAR(80) NOT NULL,
+    producer_id INT NOT NULL,
+    sequence_number BIGINT NOT NULL,
+    payload TEXT NOT NULL,
+    generated_at TIMESTAMP(6) NOT NULL,
+    consumed_at TIMESTAMP(6) NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_consumed_events_event_id (event_id),
+    KEY idx_consumed_events_producer_sequence (producer_id, sequence_number)
+);
+
+CREATE TABLE IF NOT EXISTS vendor_events (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    event_id VARCHAR(120) NOT NULL,
+    vendor_name VARCHAR(120) NOT NULL,
+    schema_version VARCHAR(40) NOT NULL,
+    fields_json JSON NOT NULL,
+    received_at TIMESTAMP(6) NOT NULL,
+    consumed_at TIMESTAMP(6) NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_vendor_events_vendor_event (vendor_name, event_id),
+    KEY idx_vendor_events_vendor_consumed (vendor_name, consumed_at)
+);
+
+CREATE TABLE IF NOT EXISTS vendor_dead_letters (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    event_id VARCHAR(120),
+    vendor_name VARCHAR(120),
+    schema_version VARCHAR(40),
+    payload_json JSON,
+    source_topic VARCHAR(255) NOT NULL,
+    source_partition INT NOT NULL,
+    source_offset BIGINT NOT NULL,
+    error_type VARCHAR(255) NOT NULL,
+    error_message TEXT,
+    retry_count INT NOT NULL,
+    failed_at TIMESTAMP(6) NOT NULL,
+    PRIMARY KEY (id),
+    KEY idx_vendor_dead_letters_vendor_failed (vendor_name, failed_at),
+    KEY idx_vendor_dead_letters_source (source_topic, source_partition, source_offset)
+);
+
+CREATE TABLE IF NOT EXISTS vendor_callback_queue_config (
+  queue_id int(11) NOT NULL AUTO_INCREMENT,
+  queue_name varchar(128) DEFAULT NULL,
+  cons_pool_size int(11) DEFAULT NULL,
+  prod_block_queue_size int(5) unsigned DEFAULT '0',
+  cons_block_queue_size int(5) unsigned DEFAULT '0',
+  fetch_size int(5) unsigned DEFAULT NULL,
+  producer_sleep_time bigint(20) NOT NULL DEFAULT '60000',
+  consumer_sleep_time bigint(20) NOT NULL DEFAULT '60000',
+  status tinyint(1) DEFAULT '1',
+  refetch_interval int(11) DEFAULT '1',
+  vendor_circle_flag tinyint(1) DEFAULT '0',
+  vendor_name varchar(50) DEFAULT NULL,
+  circle_name varchar(50) DEFAULT NULL,
+  max_retry_count int(10) DEFAULT '3',
+  table_name varchar(50) DEFAULT NULL,
+  PRIMARY KEY (queue_id),
+  UNIQUE KEY queue_name (queue_name),
+  UNIQUE KEY table_name (table_name)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+
+CREATE TABLE IF NOT EXISTS vendor_a_events (
+    eventId varchar(120) NOT NULL,
+    customerId varchar(120) NOT NULL,
+    amount decimal(18, 2) NOT NULL,
+    PRIMARY KEY (eventId)
+);
+
+CREATE TABLE IF NOT EXISTS vendor_b_events (
+    messageId varchar(120) NOT NULL,
+    accountNumber varchar(120) NOT NULL,
+    status varchar(50) NOT NULL,
+    PRIMARY KEY (messageId)
+);
+
+INSERT IGNORE INTO vendor_callback_queue_config
+(queue_name, cons_pool_size, prod_block_queue_size, cons_block_queue_size, fetch_size,
+ producer_sleep_time, consumer_sleep_time, status, refetch_interval, vendor_circle_flag,
+ vendor_name, circle_name, max_retry_count, table_name)
+VALUES
+('vendor-a.raw', 12, 1000, 1000, 500, 60000, 60000, 1, 1, 0, 'vendor-a', NULL, 3, 'vendor_a_events'),
+('vendor-b.raw', 12, 1000, 1000, 500, 60000, 60000, 1, 1, 0, 'vendor-b', NULL, 3, 'vendor_b_events');
