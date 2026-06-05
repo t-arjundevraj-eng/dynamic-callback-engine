@@ -5,10 +5,14 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import org.example.callback.dto.VendorConfigurationRow;
 import org.example.callback.dto.VendorParamDefinition;
 import org.example.callback.util.LegacyCallbackParamMapper;
+import org.example.persistence.SqlIdentifier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -17,7 +21,12 @@ import org.springframework.util.StringUtils;
 @Repository
 public class VendorConfigurationJdbcRepository {
 
+    private static final Logger log = LoggerFactory.getLogger(VendorConfigurationJdbcRepository.class);
+
     private static final String CALLBACK_MODULE = "CallbackManagement";
+
+    private static final List<String> IP_COLUMN_CANDIDATES = Arrays.asList(
+            "ip_address", "ip", "allowed_ip", "vendor_ip", "server_ip");
 
     private static final String RESOLVED_VENDOR_JOIN =
             "SELECT vm.vendor_id AS vendorId, "
@@ -60,8 +69,9 @@ public class VendorConfigurationJdbcRepository {
                     + "AND (circle_name IS NULL OR circle_name = ?) "
                     + "ORDER BY id";
 
-    private static final String IPS_BY_VENDOR =
-            "SELECT ip_address FROM sm_vendor_ip_mapping WHERE vendor_id = ?";
+    private static final String IP_MAPPING_COLUMNS =
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+                    + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sm_vendor_ip_mapping'";
 
     private static final String NOTIFICATION_STATUSES_BY_VENDOR =
             "SELECT GROUP_CONCAT(DISTINCT status) AS statusList "
@@ -70,6 +80,8 @@ public class VendorConfigurationJdbcRepository {
 
     private final JdbcTemplate jdbcTemplate;
     private final BeanPropertyRowMapper<VendorConfigurationRow> configurationRowMapper;
+    private volatile String resolvedIpColumn;
+    private volatile boolean ipColumnResolutionAttempted;
 
     public VendorConfigurationJdbcRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
@@ -116,7 +128,59 @@ public class VendorConfigurationJdbcRepository {
     }
 
     public List<String> findAllowedIpAddresses(int vendorId) {
-        return jdbcTemplate.queryForList(IPS_BY_VENDOR, String.class, vendorId);
+        String ipColumn = resolveIpMappingColumn();
+        if (!StringUtils.hasText(ipColumn)) {
+            return Collections.emptyList();
+        }
+        String sql = "SELECT " + SqlIdentifier.columnName(ipColumn)
+                + " FROM sm_vendor_ip_mapping WHERE vendor_id = ?";
+        try {
+            return jdbcTemplate.queryForList(sql, String.class, vendorId);
+        } catch (Exception ex) {
+            log.debug("IP allow-list lookup skipped for vendorId={}: {}", vendorId, ex.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * Production {@code sm_vendor_ip_mapping} may use {@code ip} instead of {@code ip_address}.
+     * IP filtering is optional; an empty result disables IP validation.
+     */
+    private String resolveIpMappingColumn() {
+        if (ipColumnResolutionAttempted) {
+            return resolvedIpColumn;
+        }
+        synchronized (this) {
+            if (ipColumnResolutionAttempted) {
+                return resolvedIpColumn;
+            }
+            ipColumnResolutionAttempted = true;
+            try {
+                List<String> columns = jdbcTemplate.queryForList(IP_MAPPING_COLUMNS, String.class);
+                Set<String> normalized = new LinkedHashSet<String>();
+                for (String column : columns) {
+                    normalized.add(column.toLowerCase(Locale.ROOT));
+                }
+                for (String candidate : IP_COLUMN_CANDIDATES) {
+                    if (normalized.contains(candidate)) {
+                        resolvedIpColumn = candidate;
+                        if (!"ip_address".equals(candidate)) {
+                            log.info("Using sm_vendor_ip_mapping column '{}' (production schema)", candidate);
+                        }
+                        return resolvedIpColumn;
+                    }
+                }
+                if (!normalized.isEmpty()) {
+                    log.warn("sm_vendor_ip_mapping has no known IP column {}; IP allow-list disabled",
+                            normalized);
+                }
+            } catch (Exception ex) {
+                log.warn("Could not read sm_vendor_ip_mapping columns; IP allow-list disabled: {}",
+                        ex.getMessage());
+            }
+            resolvedIpColumn = null;
+            return null;
+        }
     }
 
     public Set<String> findAllowedNotificationStatuses(int vendorId) {
