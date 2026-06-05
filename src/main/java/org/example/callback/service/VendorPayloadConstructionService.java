@@ -9,6 +9,7 @@ import org.example.callback.dto.RawQueueEvent;
 import org.example.callback.dto.ResolvedVendorConfiguration;
 import org.example.callback.dto.VendorParamDefinition;
 import org.example.callback.repository.UserRegistrationJdbcRepository;
+import org.example.callback.repository.VendorRoutingLookupRepository;
 import org.example.callback.util.LegacyCallbackParamMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,9 +31,13 @@ public class VendorPayloadConstructionService {
     private static final String IP_FIELD = "ip_address";
 
     private final UserRegistrationJdbcRepository userRegistrationRepository;
+    private final VendorRoutingLookupRepository routingLookupRepository;
 
-    public VendorPayloadConstructionService(UserRegistrationJdbcRepository userRegistrationRepository) {
+    public VendorPayloadConstructionService(
+            UserRegistrationJdbcRepository userRegistrationRepository,
+            VendorRoutingLookupRepository routingLookupRepository) {
         this.userRegistrationRepository = userRegistrationRepository;
+        this.routingLookupRepository = routingLookupRepository;
     }
 
     public Optional<Map<String, Object>> buildPayload(
@@ -43,7 +48,7 @@ public class VendorPayloadConstructionService {
             Map<String, Object> payload = constructLegacyPayload(event, configuration);
             return Optional.of(payload);
         } catch (CallbackValidationException ex) {
-            log.debug("Event rejected for vendor={}, circle={}, queue={}: {}",
+            log.warn("Event rejected for vendor={}, circle={}, queue={}: {}",
                     configuration.getVendorName(),
                     configuration.getCircle(),
                     configuration.getQueueName(),
@@ -57,18 +62,26 @@ public class VendorPayloadConstructionService {
         if (!StringUtils.hasText(operator)) {
             throw new CallbackValidationException("Missing operator on source event");
         }
-        if (!configuration.getAllowedOperatorIds().contains(operator)) {
+        String operatorKey = routingLookupRepository
+                .resolveOperatorKey(operator, configuration.getAllowedOperatorIds())
+                .orElse(null);
+        if (operatorKey == null) {
             throw new CallbackValidationException(
-                    "Operator " + operator + " is not allowed for vendor " + configuration.getVendorId());
+                    "Operator " + operator + " is not allowed for vendor " + configuration.getVendorId()
+                            + " (allowed: " + configuration.getAllowedOperatorIds() + ")");
         }
 
         String packName = stringValue(event.getField(PACK_FIELD));
         if (!StringUtils.hasText(packName)) {
             throw new CallbackValidationException("Missing pack_name on source event");
         }
-        if (!configuration.getAllowedPackIds().contains(packName)) {
+        String packKey = routingLookupRepository
+                .resolvePackKey(packName, configuration.getAllowedPackIds())
+                .orElse(null);
+        if (packKey == null) {
             throw new CallbackValidationException(
-                    "Pack " + packName + " is not active for vendor " + configuration.getVendorId());
+                    "Pack " + packName + " is not active for vendor " + configuration.getVendorId()
+                            + " (allowed: " + configuration.getAllowedPackIds() + ")");
         }
 
         validateNotificationStatus(event, configuration.getAllowedNotificationStatuses());
