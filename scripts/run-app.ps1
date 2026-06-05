@@ -2,7 +2,8 @@ param(
     [string]$MysqlUser = "root",
     [string]$MysqlPassword = "root",
     [string]$MysqlUrl = "jdbc:mysql://localhost:3306/kafka_demo?rewriteBatchedStatements=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",
-    [string]$KafkaBootstrapServers = "localhost:9092"
+    [string]$KafkaBootstrapServers = "localhost:9092",
+    [switch]$NoLogFile
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,4 +24,20 @@ $env:SPRING_DATASOURCE_USERNAME = $MysqlUser
 $env:SPRING_DATASOURCE_PASSWORD = $MysqlPassword
 $env:SPRING_KAFKA_BOOTSTRAP_SERVERS = $KafkaBootstrapServers
 
-& $mvnPath spring-boot:run
+$logFile = $null
+if (-not $NoLogFile) {
+    $logDir = Join-Path $PSScriptRoot "..\logs"
+    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+    $logFile = Join-Path $logDir ("app-{0:yyyyMMdd-HHmmss}.log" -f (Get-Date))
+    Write-Host ""
+    Write-Host "Full output is also written to:" -ForegroundColor Cyan
+    Write-Host "  $logFile" -ForegroundColor Cyan
+    Write-Host "After startup, run:  .\scripts\show-callback-status.ps1" -ForegroundColor Cyan
+    Write-Host ""
+}
+
+if ($logFile) {
+    & $mvnPath spring-boot:run 2>&1 | Tee-Object -FilePath $logFile
+} else {
+    & $mvnPath spring-boot:run
+}

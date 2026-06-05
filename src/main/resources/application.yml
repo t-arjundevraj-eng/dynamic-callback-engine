@@ -62,3 +62,13 @@ spring:
         spring.json.value.default.type: org.example.messaging.TelemetryEvent
         fetch.min.bytes: 1048576
         fetch.max.wait.ms: 500
+
+# Kafka consumer internals log thousands of partition-assignment lines at INFO.
+# Keep callback/app logs visible; raise Kafka back to INFO only when debugging brokers.
+logging:
+  level:
+    root: INFO
+    org.apache.kafka: WARN
+    org.springframework.kafka: WARN
+    org.example.callback: INFO
+    org.example.vendor: INFO
