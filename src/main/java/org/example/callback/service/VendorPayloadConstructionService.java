@@ -96,14 +96,49 @@ public class VendorPayloadConstructionService {
         if (allowedStatuses == null || allowedStatuses.isEmpty()) {
             return;
         }
-        String rowStatus = stringValue(event.getField(STATUS_FIELD));
+        String rowStatus = normalizeStatus(event.getField(STATUS_FIELD));
         if (!StringUtils.hasText(rowStatus)) {
             throw new CallbackValidationException("Missing status on source event");
         }
-        if (!allowedStatuses.contains(rowStatus)) {
+        if (!isAllowedNotificationStatus(rowStatus, allowedStatuses)) {
             throw new CallbackValidationException(
                     "Status " + rowStatus + " is not configured for callback notification");
         }
+    }
+
+    /**
+     * Production queue tables often store {@code status} as TINYINT(1); JDBC returns boolean.
+     * Legacy PRBT compares numeric notification codes (0, 2, 14, ...).
+     */
+    private static String normalizeStatus(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Boolean) {
+            return ((Boolean) value) ? "1" : "0";
+        }
+        if (value instanceof Number) {
+            return String.valueOf(((Number) value).intValue());
+        }
+        String text = String.valueOf(value).trim();
+        if ("true".equalsIgnoreCase(text)) {
+            return "1";
+        }
+        if ("false".equalsIgnoreCase(text)) {
+            return "0";
+        }
+        return text;
+    }
+
+    private static boolean isAllowedNotificationStatus(String rowStatus, Set<String> allowedStatuses) {
+        if (allowedStatuses.contains(rowStatus)) {
+            return true;
+        }
+        // Some MySQL drivers surface active subscription rows as true/1 while config lists 0.
+        if ("1".equals(rowStatus) && allowedStatuses.contains("0")) {
+            return true;
+        }
+        return false;
     }
 
     private void validateIpIfConfigured(RawQueueEvent event, Set<String> allowedIps) {
@@ -131,7 +166,7 @@ public class VendorPayloadConstructionService {
         putIfPresent(payload, "amount", event.getField("price_point_charged"));
         putIfPresent(payload, "transactionId", event.getField("transaction_id"));
         putIfPresent(payload, "action", event.getField("action"));
-        putIfPresent(payload, "userStatus", event.getField(STATUS_FIELD));
+        putIfPresent(payload, "userStatus", normalizeStatus(event.getField(STATUS_FIELD)));
         putIfPresent(payload, "operator", event.getField(OPERATOR_FIELD));
         putIfPresent(payload, "channel", event.getField("channel"));
         putIfPresent(payload, "packName", event.getField(PACK_FIELD));

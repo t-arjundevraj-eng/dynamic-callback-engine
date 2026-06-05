@@ -193,7 +193,11 @@ public class VendorConfigurationJdbcRepository {
             return Collections.emptySet();
         }
         Set<String> statuses = new LinkedHashSet<String>();
-        statuses.addAll(Arrays.asList(statusList.split(",")));
+        for (String token : statusList.split(",")) {
+            if (StringUtils.hasText(token)) {
+                statuses.add(token.trim());
+            }
+        }
         return statuses;
     }
 }
