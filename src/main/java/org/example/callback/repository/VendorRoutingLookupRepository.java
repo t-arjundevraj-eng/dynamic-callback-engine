@@ -26,11 +26,16 @@ public class VendorRoutingLookupRepository {
     private static final Logger log = LoggerFactory.getLogger(VendorRoutingLookupRepository.class);
 
     private static final List<String> OPERATOR_TABLE_CANDIDATES = Arrays.asList(
+            "sm_operator_circle", "sm_operator_zone", "channel_mapping",
             "sm_operator", "sm_operator_master", "operator_master", "operator_details",
             "sm_operator_details", "tbl_operator", "operator");
     private static final List<String> PACK_TABLE_CANDIDATES = Arrays.asList(
-            "sm_pack", "sm_pack_master", "pack_master", "pack_details", "sm_pack_details",
-            "tbl_pack", "pack");
+            "sm_pack", "sm_service_pack", "sm_product_pack", "sm_pack_master", "pack_master",
+            "pack_details", "sm_pack_details", "product_master", "tbl_pack", "pack");
+
+    private static final String[] CIRCLE_COLUMN_CANDIDATES = {
+            "circle", "circle_name", "circle_id", "zone", "zone_name", "operator_circle", "region"
+    };
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -52,24 +57,39 @@ public class VendorRoutingLookupRepository {
         if (operatorIds != null) {
             keys.addAll(operatorIds);
         }
-        MasterTableBinding binding = operatorBinding();
+        keys.addAll(expandOperatorKeysFromBinding(vendorId, operatorIds, operatorBinding()));
+        keys.addAll(expandOperatorKeysFromBinding(vendorId, operatorIds, bindTable("sm_operator_circle", true)));
+        keys.addAll(expandOperatorKeysFromBinding(vendorId, operatorIds, bindTable("sm_operator_zone", true)));
+        if (keys.size() > (operatorIds != null ? operatorIds.size() : 0)) {
+            log.info("Expanded operator allow-list for vendorId={} ({} keys)", vendorId, keys.size());
+        }
+        return keys;
+    }
+
+    private Set<String> expandOperatorKeysFromBinding(
+            int vendorId, Set<String> operatorIds, MasterTableBinding binding) {
+        Set<String> expanded = new LinkedHashSet<String>();
         if (binding == null || operatorIds == null || operatorIds.isEmpty()) {
-            return keys;
+            return expanded;
         }
         String sql = "SELECT DISTINCT o." + binding.nameColumn
                 + " FROM sm_vendor_operator_mapping m"
                 + " INNER JOIN " + binding.tableName + " o"
                 + " ON CAST(m.operator_id AS CHAR) = CAST(o." + binding.idColumn + " AS CHAR)"
-                + " WHERE m.vendor_id = ?";
+                + " WHERE m.vendor_id = ?"
+                + " AND o." + binding.nameColumn + " IS NOT NULL"
+                + " AND TRIM(o." + binding.nameColumn + ") <> ''";
         try {
-            keys.addAll(jdbcTemplate.queryForList(sql, String.class, vendorId));
-            log.info("Expanded operator allow-list for vendorId={} using {} ({} keys)",
-                    vendorId, binding.tableName, keys.size());
+            expanded.addAll(jdbcTemplate.queryForList(sql, String.class, vendorId));
+            if (!expanded.isEmpty()) {
+                log.info("Operator allow-list +{} name(s) from {}.{} for vendorId={}",
+                        expanded.size(), binding.tableName, binding.nameColumn, vendorId);
+            }
         } catch (DataAccessException ex) {
-            log.warn("Could not expand operator allow-list for vendorId={} via {}: {}",
-                    vendorId, binding.tableName, ex.getMessage());
+            log.debug("Operator expansion via {} skipped for vendorId={}: {}",
+                    binding.tableName, vendorId, ex.getMessage());
         }
-        return keys;
+        return expanded;
     }
 
     /**
@@ -103,7 +123,11 @@ public class VendorRoutingLookupRepository {
         return keys;
     }
 
-    public Optional<String> resolveOperatorKey(String operatorFromQueue, Set<String> allowedOperatorKeys) {
+    public Optional<String> resolveOperatorKey(
+            String operatorFromQueue,
+            Set<String> allowedOperatorKeys,
+            int vendorId,
+            String circle) {
         if (!StringUtils.hasText(operatorFromQueue) || allowedOperatorKeys == null || allowedOperatorKeys.isEmpty()) {
             return Optional.empty();
         }
@@ -115,10 +139,21 @@ public class VendorRoutingLookupRepository {
         if (resolved.isPresent() && containsIgnoreCase(allowedOperatorKeys, resolved.get())) {
             return resolved;
         }
+        Optional<String> fromCircle = resolveOperatorIdViaCircle(trimmed, vendorId, circle, allowedOperatorKeys);
+        if (fromCircle.isPresent()) {
+            return fromCircle;
+        }
+        if (hasRegistrationTable(trimmed) && vendorHasOperatorMappings(vendorId)) {
+            log.debug("Operator {} allowed via sm_user_registration_{}", trimmed, trimmed.toLowerCase(Locale.ROOT));
+            return Optional.of(trimmed);
+        }
         return Optional.empty();
     }
 
-    public Optional<String> resolvePackKey(String packFromQueue, Set<String> allowedPackKeys) {
+    public Optional<String> resolvePackKey(
+            String packFromQueue,
+            Set<String> allowedPackKeys,
+            int vendorId) {
         if (!StringUtils.hasText(packFromQueue) || allowedPackKeys == null || allowedPackKeys.isEmpty()) {
             return Optional.empty();
         }
@@ -129,6 +164,9 @@ public class VendorRoutingLookupRepository {
         Optional<String> resolved = lookupPackId(trimmed);
         if (resolved.isPresent() && containsIgnoreCase(allowedPackKeys, resolved.get())) {
             return resolved;
+        }
+        if (isPackLinkedToVendor(trimmed, vendorId, allowedPackKeys)) {
+            return Optional.of(trimmed);
         }
         return Optional.empty();
     }
@@ -246,7 +284,9 @@ public class VendorRoutingLookupRepository {
 
     private List<String> discoverTablesFromSchema(boolean operator) {
         String idColumn = operator ? "operator_id" : "pack_id";
-        String namePattern = operator ? "operator%" : "pack%";
+        String nameInClause = operator
+                ? "('operator_name', 'operator', 'operator_code')"
+                : "('pack_name', 'pack', 'pack_code', 'service_name')";
         try {
             List<String> tables = jdbcTemplate.queryForList(
                     "SELECT DISTINCT c1.TABLE_NAME"
@@ -255,11 +295,12 @@ public class VendorRoutingLookupRepository {
                             + " ON c1.TABLE_SCHEMA = c2.TABLE_SCHEMA AND c1.TABLE_NAME = c2.TABLE_NAME"
                             + " WHERE c1.TABLE_SCHEMA = DATABASE()"
                             + " AND c1.COLUMN_NAME = ?"
-                            + " AND c2.COLUMN_NAME LIKE ?"
+                            + " AND c2.COLUMN_NAME IN " + nameInClause
+                            + " AND c1.TABLE_NAME NOT LIKE '%audit%'"
+                            + " AND c1.TABLE_NAME NOT IN ('sm_vendor_operator_mapping', 'sm_roles')"
                             + " ORDER BY c1.TABLE_NAME",
                     String.class,
-                    idColumn,
-                    namePattern);
+                    idColumn);
             List<String> ranked = new ArrayList<String>(tables);
             ranked.sort(bindingTableComparator());
             return ranked;
@@ -308,11 +349,16 @@ public class VendorRoutingLookupRepository {
         String nameColumn = firstPresent(columns,
                 operator ? "operator_name" : "pack_name",
                 operator ? "operator" : "pack",
+                operator ? "operator_code" : "pack_code",
                 "name");
         if (idColumn == null || nameColumn == null || idColumn.equals(nameColumn)) {
             return null;
         }
         return new MasterTableBinding(tableName, idColumn, nameColumn);
+    }
+
+    private String resolveCircleColumn(String tableName) {
+        return firstPresent(tableColumns(tableName), CIRCLE_COLUMN_CANDIDATES);
     }
 
     private Set<String> tableColumns(String tableName) {
@@ -342,6 +388,103 @@ public class VendorRoutingLookupRepository {
             }
         }
         return false;
+    }
+
+    private Optional<String> resolveOperatorIdViaCircle(
+            String operatorName,
+            int vendorId,
+            String circle,
+            Set<String> allowedOperatorKeys) {
+        MasterTableBinding binding = bindTable("sm_operator_circle", true);
+        if (binding == null) {
+            return Optional.empty();
+        }
+        String circleColumn = resolveCircleColumn("sm_operator_circle");
+        StringBuilder sql = new StringBuilder("SELECT DISTINCT CAST(m.operator_id AS CHAR)"
+                + " FROM sm_vendor_operator_mapping m"
+                + " INNER JOIN sm_operator_circle oc"
+                + " ON CAST(m.operator_id AS CHAR) = CAST(oc." + binding.idColumn + " AS CHAR)"
+                + " WHERE m.vendor_id = ?"
+                + " AND LOWER(oc." + binding.nameColumn + ") = LOWER(?)");
+        List<Object> args = new ArrayList<Object>();
+        args.add(vendorId);
+        args.add(operatorName);
+        if (circleColumn != null && StringUtils.hasText(circle)) {
+            sql.append(" AND LOWER(oc.").append(circleColumn).append(") = LOWER(?)");
+            args.add(circle.trim());
+        }
+        sql.append(" LIMIT 1");
+        try {
+            List<String> ids = jdbcTemplate.queryForList(
+                    sql.toString(), String.class, args.toArray());
+            if (ids.isEmpty() || !StringUtils.hasText(ids.get(0))) {
+                return Optional.empty();
+            }
+            String operatorId = ids.get(0).trim();
+            if (containsIgnoreCase(allowedOperatorKeys, operatorId)) {
+                return Optional.of(operatorName);
+            }
+        } catch (DataAccessException ex) {
+            log.debug("Operator-circle lookup failed for {} circle={}: {}",
+                    operatorName, circle, ex.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    private boolean hasRegistrationTable(String operator) {
+        String tableName = "sm_user_registration_" + operator.trim().toLowerCase(Locale.ROOT);
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables "
+                        + "WHERE table_schema = DATABASE() AND table_name = ?",
+                Integer.class,
+                tableName);
+        return count != null && count > 0;
+    }
+
+    private boolean vendorHasOperatorMappings(int vendorId) {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM sm_vendor_operator_mapping WHERE vendor_id = ?",
+                Integer.class,
+                vendorId);
+        return count != null && count > 0;
+    }
+
+    private boolean isPackLinkedToVendor(String packName, int vendorId, Set<String> allowedPackKeys) {
+        MasterTableBinding binding = packBinding();
+        if (binding != null && matchesVendorPackJoin(packName, vendorId, allowedPackKeys, binding)) {
+            return true;
+        }
+        for (String table : discoverTablesFromSchema(false)) {
+            MasterTableBinding candidate = bindTable(table, false);
+            if (candidate != null && matchesVendorPackJoin(packName, vendorId, allowedPackKeys, candidate)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean matchesVendorPackJoin(
+            String packName,
+            int vendorId,
+            Set<String> allowedPackKeys,
+            MasterTableBinding binding) {
+        String sql = "SELECT DISTINCT CAST(vp.pack_id AS CHAR)"
+                + " FROM sm_vendor_pack vp"
+                + " INNER JOIN " + binding.tableName + " p"
+                + " ON CAST(vp.pack_id AS CHAR) = CAST(p." + binding.idColumn + " AS CHAR)"
+                + " WHERE vp.vendor_id = ? AND vp.is_active = 1"
+                + " AND LOWER(p." + binding.nameColumn + ") = LOWER(?)"
+                + " LIMIT 1";
+        try {
+            List<String> ids = jdbcTemplate.queryForList(sql, String.class, vendorId, packName);
+            return !ids.isEmpty()
+                    && StringUtils.hasText(ids.get(0))
+                    && containsIgnoreCase(allowedPackKeys, ids.get(0).trim());
+        } catch (DataAccessException ex) {
+            log.debug("Pack join lookup failed in {} for {}: {}",
+                    binding.tableName, packName, ex.getMessage());
+            return false;
+        }
     }
 
     private static String firstPresent(Set<String> columns, String... candidates) {

@@ -63,7 +63,11 @@ public class VendorPayloadConstructionService {
             throw new CallbackValidationException("Missing operator on source event");
         }
         String operatorKey = routingLookupRepository
-                .resolveOperatorKey(operator, configuration.getAllowedOperatorIds())
+                .resolveOperatorKey(
+                        operator,
+                        configuration.getAllowedOperatorIds(),
+                        configuration.getVendorId(),
+                        firstNonBlank(stringValue(event.getField("circle")), configuration.getCircle()))
                 .orElse(null);
         if (operatorKey == null) {
             throw new CallbackValidationException(
@@ -76,7 +80,7 @@ public class VendorPayloadConstructionService {
             throw new CallbackValidationException("Missing pack_name on source event");
         }
         String packKey = routingLookupRepository
-                .resolvePackKey(packName, configuration.getAllowedPackIds())
+                .resolvePackKey(packName, configuration.getAllowedPackIds(), configuration.getVendorId())
                 .orElse(null);
         if (packKey == null) {
             throw new CallbackValidationException(
