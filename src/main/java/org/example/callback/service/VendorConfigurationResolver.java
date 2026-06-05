@@ -12,6 +12,7 @@ import org.example.callback.dto.VendorConfigurationRow;
 import org.example.callback.dto.VendorParamDefinition;
 import org.example.callback.repository.VendorCallbackSourceTableProvisioner;
 import org.example.callback.repository.VendorConfigurationJdbcRepository;
+import org.example.callback.repository.VendorRoutingLookupRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import javax.annotation.PostConstruct;
@@ -26,6 +27,7 @@ public class VendorConfigurationResolver {
     private static final Logger log = LoggerFactory.getLogger(VendorConfigurationResolver.class);
 
     private final VendorConfigurationJdbcRepository configurationRepository;
+    private final VendorRoutingLookupRepository routingLookupRepository;
     private final VendorCallbackSourceTableProvisioner sourceTableProvisioner;
     private final VendorCallbackProperties properties;
     private final AtomicReference<List<ResolvedVendorConfiguration>> cache =
@@ -33,9 +35,11 @@ public class VendorConfigurationResolver {
 
     public VendorConfigurationResolver(
             VendorConfigurationJdbcRepository configurationRepository,
+            VendorRoutingLookupRepository routingLookupRepository,
             VendorCallbackSourceTableProvisioner sourceTableProvisioner,
             VendorCallbackProperties properties) {
         this.configurationRepository = configurationRepository;
+        this.routingLookupRepository = routingLookupRepository;
         this.sourceTableProvisioner = sourceTableProvisioner;
         this.properties = properties;
     }
@@ -74,10 +78,12 @@ public class VendorConfigurationResolver {
         int vendorId = row.getVendorId();
         String circle = row.getCircle();
 
-        Set<String> operators = new LinkedHashSet<String>(
-                configurationRepository.findOperatorIds(vendorId));
-        Set<String> packs = new LinkedHashSet<String>(
-                configurationRepository.findActivePackIds(vendorId));
+        Set<String> operators = routingLookupRepository.expandAllowedOperatorKeys(
+                vendorId,
+                new LinkedHashSet<String>(configurationRepository.findOperatorIds(vendorId)));
+        Set<String> packs = routingLookupRepository.expandAllowedPackKeys(
+                vendorId,
+                new LinkedHashSet<String>(configurationRepository.findActivePackIds(vendorId)));
         Set<String> ips = new LinkedHashSet<String>(
                 configurationRepository.findAllowedIpAddresses(vendorId));
         Set<String> notificationStatuses = new LinkedHashSet<String>(
