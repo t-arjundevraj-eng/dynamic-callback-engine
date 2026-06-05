@@ -11,7 +11,6 @@ public class VendorCallbackQueueConfig {
     private Long producerSleepTime;
     private Long consumerSleepTime;
     private Boolean active;
-    private Integer refetchInterval;
     private Boolean vendorCircleFlag;
     private String vendorName;
     private String circleName;
@@ -88,14 +87,6 @@ public class VendorCallbackQueueConfig {
 
     public void setActive(Boolean active) {
         this.active = active;
-    }
-
-    public Integer getRefetchInterval() {
-        return refetchInterval;
-    }
-
-    public void setRefetchInterval(Integer refetchInterval) {
-        this.refetchInterval = refetchInterval;
     }
 
     public Boolean getVendorCircleFlag() {

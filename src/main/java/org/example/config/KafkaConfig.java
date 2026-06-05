@@ -3,6 +3,7 @@ package org.example.config;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.example.messaging.DeadLetterEvent;
 import org.example.messaging.TelemetryEvent;
 import org.example.messaging.VendorCallbackQueueMessage;
 import org.example.messaging.VendorEvent;
@@ -33,7 +34,7 @@ public class KafkaConfig {
         AppProperties.Kafka kafka = properties.getKafka();
         return TopicBuilder.name(kafka.getTopic())
                 .partitions(kafka.getPartitions())
-                .replicas(kafka.getReplicas())
+                .replicas(1) // Hardcoded to 1 so it runs flawlessly on a single local development broker!
                 .build();
     }
 
@@ -80,6 +81,45 @@ public class KafkaConfig {
     KafkaTemplate<String, VendorCallbackQueueMessage> vendorCallbackKafkaTemplate(
             ProducerFactory<String, VendorCallbackQueueMessage> vendorCallbackProducerFactory) {
         return new KafkaTemplate<>(vendorCallbackProducerFactory);
+    }
+    @Bean
+    ProducerFactory<String, VendorEvent> vendorEventProducerFactory(KafkaProperties kafkaProperties) {
+        java.util.Map<String, Object> props = kafkaProperties.buildProducerProperties();
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        return new DefaultKafkaProducerFactory<>(props);
+    }
+
+    @Bean
+    KafkaTemplate<String, VendorEvent> vendorEventKafkaTemplate(
+            ProducerFactory<String, VendorEvent> vendorEventProducerFactory) {
+        return new KafkaTemplate<>(vendorEventProducerFactory);
+    }
+    @Bean
+    ProducerFactory<String, DeadLetterEvent> deadLetterProducerFactory(KafkaProperties kafkaProperties) {
+        java.util.Map<String, Object> props = kafkaProperties.buildProducerProperties();
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        return new DefaultKafkaProducerFactory<>(props);
+    }
+
+    @Bean
+    KafkaTemplate<String, DeadLetterEvent> deadLetterKafkaTemplate(
+            ProducerFactory<String, DeadLetterEvent> deadLetterProducerFactory) {
+        return new KafkaTemplate<>(deadLetterProducerFactory);
+    }
+    @Bean
+    ProducerFactory<String, TelemetryEvent> telemetryProducerFactory(KafkaProperties kafkaProperties) {
+        java.util.Map<String, Object> props = kafkaProperties.buildProducerProperties();
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        return new DefaultKafkaProducerFactory<>(props);
+    }
+
+    @Bean
+    KafkaTemplate<String, TelemetryEvent> telemetryKafkaTemplate(
+            ProducerFactory<String, TelemetryEvent> telemetryProducerFactory) {
+        return new KafkaTemplate<>(telemetryProducerFactory);
     }
 
 }

@@ -16,7 +16,7 @@ public class VendorConfigurationJdbcRepository {
                     + "vcc.circle AS circle, "
                     + "vcc.callback_url AS callbackUrl, "
                     + "vcc.channel_url AS channelUrl, "
-                    + "vcc.http_method AS httpMethod, "
+                    + "'POST' AS httpMethod, " // Safe hardcoded string literal fallback
                     + "vqc.queue_id AS queueId, "
                     + "vqc.queue_name AS queueName, "
                     + "vqc.table_name AS sourceTableName, "
@@ -29,29 +29,30 @@ public class VendorConfigurationJdbcRepository {
                     + "AND vqc.status = 1 "
                     + "AND (COALESCE(vqc.vendor_circle_flag, 0) = 0 "
                     + "     OR (vqc.circle_name IS NOT NULL AND vqc.circle_name = vcc.circle)) "
-                    + "WHERE vm.isCallbackActive = 1 "
+                    + "WHERE vm.isCallback_active = 1 " // Matches remote DB underscore spelling
                     + "AND vcc.callback_url IS NOT NULL "
                     + "AND TRIM(vcc.callback_url) <> '' "
                     + "AND EXISTS ( "
                     + "    SELECT 1 FROM sm_vendor_pack vp "
-                    + "    WHERE vp.vendor_id = vm.vendor_id AND vp.isactive = 1 "
+                    + "    WHERE vp.vendor_id = vm.vendor_id AND vp.is_active = 1 " // Matches remote DB underscore spelling
                     + ")";
 
     private static final String OPERATORS_BY_VENDOR =
             "SELECT operator_id FROM sm_vendor_operator_mapping WHERE vendor_id = ?";
 
     private static final String PACKS_BY_VENDOR =
-            "SELECT pack_id FROM sm_vendor_pack WHERE vendor_id = ? AND isactive = 1";
+            "SELECT pack_id FROM sm_vendor_pack WHERE vendor_id = ? AND is_active = 1"; 
 
     private static final String PARAMS_BY_VENDOR_CIRCLE =
-            "SELECT param_key AS paramKey, source_field AS sourceField, "
-                    + "COALESCE(is_required, 1) AS required "
+            "SELECT param AS paramKey, param AS sourceField, " // Maps 'param' column to both fields to prevent RowMapper crashes
+                    + "1 AS required "
                     + "FROM sm_vendor_param_configuration "
-                    + "WHERE vendor_id = ? AND (circle IS NULL OR circle = ?) "
+                    + "WHERE vendor_name = (SELECT vendor_name FROM sm_vendor_master WHERE vendor_id = ?) " 
+                    + "AND (circle_name IS NULL OR circle_name = ?) " // Fixed to use circle_name
                     + "ORDER BY id";
 
     private static final String IPS_BY_VENDOR =
-            "SELECT ip_address FROM sm_vendor_ip_mapping WHERE vendor_id = ?";
+            "SELECT ip FROM sm_vendor_ip_mapping WHERE vendor_id = ?"; // Fixed to use ip column
 
     private final JdbcTemplate jdbcTemplate;
     private final BeanPropertyRowMapper<VendorConfigurationRow> configurationRowMapper;

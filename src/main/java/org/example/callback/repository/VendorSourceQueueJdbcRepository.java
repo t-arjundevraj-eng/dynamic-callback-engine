@@ -15,8 +15,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 public class VendorSourceQueueJdbcRepository {
 
-    private static final String STATUS_COLUMN = "process_status";
+    // Fixed to match your database column name
+    private static final String STATUS_COLUMN = "callback_status";
     private static final String RETRY_COUNT_COLUMN = "retry_count";
+    
+    // Fixed to match your database primary key column name
+    private static final String ID_COLUMN = "request_id"; 
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -30,7 +34,7 @@ public class VendorSourceQueueJdbcRepository {
         int limit = Math.max(1, fetchSize);
         String sql = "SELECT * FROM " + safeTable
                 + " WHERE " + SqlIdentifier.columnName(STATUS_COLUMN) + " IN (?, ?)"
-                + " ORDER BY " + SqlIdentifier.columnName("id")
+                + " ORDER BY " + SqlIdentifier.columnName(ID_COLUMN) // Updated to use ID_COLUMN constant
                 + " LIMIT " + limit;
         return jdbcTemplate.queryForList(sql, ProcessStatus.NEW, ProcessStatus.RETRY);
     }
@@ -44,7 +48,7 @@ public class VendorSourceQueueJdbcRepository {
         String sql = "UPDATE " + safeTable
                 + " SET " + SqlIdentifier.columnName(STATUS_COLUMN) + " = ?, "
                 + SqlIdentifier.columnName(RETRY_COUNT_COLUMN) + " = ?"
-                + " WHERE " + SqlIdentifier.columnName("id") + " = ?";
+                + " WHERE " + SqlIdentifier.columnName(ID_COLUMN) + " = ?"; // Updated to use ID_COLUMN constant
 
         return jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
             @Override

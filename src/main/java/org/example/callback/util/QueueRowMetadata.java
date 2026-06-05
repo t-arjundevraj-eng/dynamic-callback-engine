@@ -5,7 +5,8 @@ import org.example.callback.dto.PendingQueueRow;
 
 public final class QueueRowMetadata {
 
-    private static final String ID = "id";
+    // Fixed from "id" to match your actual table column name 'request_id'
+    private static final String ID = "request_id"; 
     private static final String RETRY_COUNT = "retry_count";
 
     private QueueRowMetadata() {

@@ -12,7 +12,7 @@ public class VendorCallbackQueueConfigRepository {
             "SELECT queue_id AS queueId, queue_name AS queueName, cons_pool_size AS consPoolSize, "
                     + "prod_block_queue_size AS prodBlockQueueSize, cons_block_queue_size AS consBlockQueueSize, "
                     + "fetch_size AS fetchSize, producer_sleep_time AS producerSleepTime, "
-                    + "consumer_sleep_time AS consumerSleepTime, status AS active, refetch_interval AS refetchInterval, "
+                    + "consumer_sleep_time AS consumerSleepTime, status AS active, "
                     + "vendor_circle_flag AS vendorCircleFlag, vendor_name AS vendorName, circle_name AS circleName, "
                     + "max_retry_count AS maxRetryCount, table_name AS tableName "
                     + "FROM vendor_callback_queue_config WHERE status = 1";

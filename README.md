@@ -193,7 +193,7 @@ Events are published to `queue_callback_one97.ingest` and, when consumed, insert
 ## Adding a new vendor queue
 
 1. **Insert** `vendor_callback_queue_config` (`queue_name`, `table_name`, `vendor_name`, `fetch_size`, `producer_sleep_time`, `cons_pool_size`, `max_retry_count`, `status = 1`).
-2. **Configure** `sm_vendor_master` (`isCallbackActive = 1`), operators, packs, `sm_vendor_callback_config`, and `sm_vendor_param_configuration` for the vendor/circle.
+2. **Configure** `sm_vendor_master` (`isCallback_active = 1`), operators, packs, `sm_vendor_callback_config`, and `sm_vendor_param_configuration` for the vendor/circle.
 3. **Create** the source table (or let `VendorCallbackSourceTableProvisioner` create it on config refresh).
 4. **Insert** rows with `process_status = 'NEW'`, `operator_id`, `pack_id`, and required business columns.
 5. **Restart** or wait for `config-refresh-ms` — pollers and Kafka consumers are rescheduled automatically.
