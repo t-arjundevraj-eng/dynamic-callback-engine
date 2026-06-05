@@ -80,6 +80,8 @@ public class VendorConfigurationResolver {
                 configurationRepository.findActivePackIds(vendorId));
         Set<String> ips = new LinkedHashSet<String>(
                 configurationRepository.findAllowedIpAddresses(vendorId));
+        Set<String> notificationStatuses = new LinkedHashSet<String>(
+                configurationRepository.findAllowedNotificationStatuses(vendorId));
         List<VendorParamDefinition> params =
                 configurationRepository.findParamDefinitions(vendorId, circle);
 
@@ -101,6 +103,8 @@ public class VendorConfigurationResolver {
         return new ResolvedVendorConfiguration(
                 vendorId,
                 row.getVendorName(),
+                row.getUsername(),
+                row.getPassword(),
                 circle,
                 row.getCallbackUrl(),
                 row.getChannelUrl(),
@@ -114,6 +118,7 @@ public class VendorConfigurationResolver {
                 operators,
                 packs,
                 ips,
+                notificationStatuses,
                 params
         );
     }

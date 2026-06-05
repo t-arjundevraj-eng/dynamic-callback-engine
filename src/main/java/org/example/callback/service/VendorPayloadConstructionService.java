@@ -8,29 +8,39 @@ import org.example.callback.CallbackValidationException;
 import org.example.callback.dto.RawQueueEvent;
 import org.example.callback.dto.ResolvedVendorConfiguration;
 import org.example.callback.dto.VendorParamDefinition;
+import org.example.callback.repository.UserRegistrationJdbcRepository;
+import org.example.callback.util.LegacyCallbackParamMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 /**
- * Step 3: Validates operator/pack mappings and builds the outbound callback payload.
+ * Validates operator/pack mappings, loads user-registration params, and builds legacy GET query payloads.
  */
 @Service
 public class VendorPayloadConstructionService {
 
     private static final Logger log = LoggerFactory.getLogger(VendorPayloadConstructionService.class);
 
-    private static final String OPERATOR_FIELD = "operator_id";
-    private static final String PACK_FIELD = "pack_id";
+    private static final String OPERATOR_FIELD = "operator";
+    private static final String PACK_FIELD = "pack_name";
+    private static final String MSISDN_FIELD = "msisdn";
+    private static final String STATUS_FIELD = "status";
     private static final String IP_FIELD = "ip_address";
+
+    private final UserRegistrationJdbcRepository userRegistrationRepository;
+
+    public VendorPayloadConstructionService(UserRegistrationJdbcRepository userRegistrationRepository) {
+        this.userRegistrationRepository = userRegistrationRepository;
+    }
 
     public Optional<Map<String, Object>> buildPayload(
             RawQueueEvent event,
             ResolvedVendorConfiguration configuration) {
         try {
             validateRouting(event, configuration);
-            Map<String, Object> payload = constructPayload(event, configuration);
+            Map<String, Object> payload = constructLegacyPayload(event, configuration);
             return Optional.of(payload);
         } catch (CallbackValidationException ex) {
             log.debug("Event rejected for vendor={}, circle={}, queue={}: {}",
@@ -43,25 +53,40 @@ public class VendorPayloadConstructionService {
     }
 
     private void validateRouting(RawQueueEvent event, ResolvedVendorConfiguration configuration) {
-        String operatorId = stringValue(event.getField(OPERATOR_FIELD));
-        if (!StringUtils.hasText(operatorId)) {
-            throw new CallbackValidationException("Missing operator_id on source event");
+        String operator = stringValue(event.getField(OPERATOR_FIELD));
+        if (!StringUtils.hasText(operator)) {
+            throw new CallbackValidationException("Missing operator on source event");
         }
-        if (!configuration.getAllowedOperatorIds().contains(operatorId)) {
+        if (!configuration.getAllowedOperatorIds().contains(operator)) {
             throw new CallbackValidationException(
-                    "Operator " + operatorId + " is not allowed for vendor " + configuration.getVendorId());
+                    "Operator " + operator + " is not allowed for vendor " + configuration.getVendorId());
         }
 
-        String packId = stringValue(event.getField(PACK_FIELD));
-        if (!StringUtils.hasText(packId)) {
-            throw new CallbackValidationException("Missing pack_id on source event");
+        String packName = stringValue(event.getField(PACK_FIELD));
+        if (!StringUtils.hasText(packName)) {
+            throw new CallbackValidationException("Missing pack_name on source event");
         }
-        if (!configuration.getAllowedPackIds().contains(packId)) {
+        if (!configuration.getAllowedPackIds().contains(packName)) {
             throw new CallbackValidationException(
-                    "Pack " + packId + " is not active for vendor " + configuration.getVendorId());
+                    "Pack " + packName + " is not active for vendor " + configuration.getVendorId());
         }
 
+        validateNotificationStatus(event, configuration.getAllowedNotificationStatuses());
         validateIpIfConfigured(event, configuration.getAllowedIpAddresses());
+    }
+
+    private void validateNotificationStatus(RawQueueEvent event, Set<String> allowedStatuses) {
+        if (allowedStatuses == null || allowedStatuses.isEmpty()) {
+            return;
+        }
+        String rowStatus = stringValue(event.getField(STATUS_FIELD));
+        if (!StringUtils.hasText(rowStatus)) {
+            throw new CallbackValidationException("Missing status on source event");
+        }
+        if (!allowedStatuses.contains(rowStatus)) {
+            throw new CallbackValidationException(
+                    "Status " + rowStatus + " is not configured for callback notification");
+        }
     }
 
     private void validateIpIfConfigured(RawQueueEvent event, Set<String> allowedIps) {
@@ -77,33 +102,116 @@ public class VendorPayloadConstructionService {
         }
     }
 
-    private Map<String, Object> constructPayload(
+    private Map<String, Object> constructLegacyPayload(
             RawQueueEvent event,
             ResolvedVendorConfiguration configuration) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
 
-        for (VendorParamDefinition definition : configuration.getParamDefinitions()) {
-            Object value = event.getField(definition.getSourceField());
-            if (value == null && definition.isRequired()) {
-                throw new CallbackValidationException(
-                        "Required source field missing: " + definition.getSourceField());
-            }
-            if (value != null) {
-                payload.put(definition.getParamKey(), value);
-            }
+        putIfPresent(payload, "vendorName", configuration.getVendorName());
+        putIfPresent(payload, "circle", firstNonBlank(
+                stringValue(event.getField("circle")), configuration.getCircle()));
+        putIfPresent(payload, "msisdn", event.getField(MSISDN_FIELD));
+        putIfPresent(payload, "amount", event.getField("price_point_charged"));
+        putIfPresent(payload, "transactionId", event.getField("transaction_id"));
+        putIfPresent(payload, "action", event.getField("action"));
+        putIfPresent(payload, "userStatus", event.getField(STATUS_FIELD));
+        putIfPresent(payload, "operator", event.getField(OPERATOR_FIELD));
+        putIfPresent(payload, "channel", event.getField("channel"));
+        putIfPresent(payload, "packName", event.getField(PACK_FIELD));
+
+        String callBackDate = LegacyCallbackParamMapper.formatCallbackDate(event.getField("request_time"));
+        putIfPresent(payload, "callBackDate", callBackDate);
+
+        Map<String, String> registrationParams = userRegistrationRepository.findRegistrationParams(
+                stringValue(event.getField(OPERATOR_FIELD)),
+                stringValue(event.getField(MSISDN_FIELD)),
+                stringValue(event.getField(PACK_FIELD)),
+                firstNonBlank(stringValue(event.getField("circle")), configuration.getCircle()));
+
+        if (!registrationParams.isEmpty()) {
+            log.info("{} userRegParam123  {}", stringValue(event.getField(MSISDN_FIELD)), registrationParams);
         }
 
-        if (StringUtils.hasText(configuration.getCircle())) {
-            payload.putIfAbsent("circle", configuration.getCircle());
-        }
-        if (StringUtils.hasText(configuration.getChannelUrl())) {
-            payload.putIfAbsent("channelUrl", configuration.getChannelUrl());
+        Map<String, Object> valueSources = buildValueSources(event, registrationParams);
+        for (VendorParamDefinition definition : configuration.getParamDefinitions()) {
+            Object value = resolveParamValue(definition.getSourceField(), valueSources);
+            if (value == null) {
+                continue;
+            }
+            String formatted = formatParamValue(definition.getSourceField(), value);
+            if (StringUtils.hasText(formatted)) {
+                payload.putIfAbsent(definition.getParamKey(), formatted);
+            }
         }
 
         if (payload.isEmpty()) {
             throw new CallbackValidationException("Constructed payload is empty");
         }
+
+        log.debug("{} paramList is: {}", stringValue(event.getField(MSISDN_FIELD)),
+                configuration.getParamDefinitions());
+        log.debug("{}_CallBackURL query params built with {} entries",
+                stringValue(event.getField(MSISDN_FIELD)), payload.size());
         return payload;
+    }
+
+    private static Map<String, Object> buildValueSources(
+            RawQueueEvent event,
+            Map<String, String> registrationParams) {
+        Map<String, Object> sources = new LinkedHashMap<String, Object>();
+        for (Map.Entry<String, Object> entry : event.getFields().entrySet()) {
+            sources.put(entry.getKey(), entry.getValue());
+        }
+        Object info = event.getField("info");
+        if (info != null && StringUtils.hasText(String.valueOf(info))) {
+            sources.putIfAbsent("language", info);
+        }
+        for (Map.Entry<String, String> entry : registrationParams.entrySet()) {
+            sources.put(entry.getKey(), entry.getValue());
+        }
+        return sources;
+    }
+
+    private static Object resolveParamValue(String sourceField, Map<String, Object> valueSources) {
+        if (!StringUtils.hasText(sourceField)) {
+            return null;
+        }
+        if (valueSources.containsKey(sourceField)) {
+            return valueSources.get(sourceField);
+        }
+        for (Map.Entry<String, Object> entry : valueSources.entrySet()) {
+            if (entry.getKey().equalsIgnoreCase(sourceField)) {
+                return entry.getValue();
+            }
+        }
+        return null;
+    }
+
+    private static String formatParamValue(String sourceField, Object value) {
+        if (value == null) {
+            return null;
+        }
+        if ("start_date".equalsIgnoreCase(sourceField) || "end_date".equalsIgnoreCase(sourceField)) {
+            return LegacyCallbackParamMapper.formatDateTimeParam(value);
+        }
+        return String.valueOf(value).trim();
+    }
+
+    private static void putIfPresent(Map<String, Object> payload, String key, Object value) {
+        if (value == null) {
+            return;
+        }
+        String text = String.valueOf(value).trim();
+        if (!text.isEmpty()) {
+            payload.put(key, text);
+        }
+    }
+
+    private static String firstNonBlank(String primary, String fallback) {
+        if (StringUtils.hasText(primary)) {
+            return primary.trim();
+        }
+        return fallback;
     }
 
     private static String stringValue(Object value) {

@@ -8,21 +8,21 @@ import org.springframework.stereotype.Service;
 @Service
 public class QueueRowStateTransitionService {
 
-    public QueueRowStateUpdate onDispatchResult(long rowId, int currentRetryCount, int maxRetryCount, DispatchResult result) {
+    public QueueRowStateUpdate onDispatchResult(String rowId, int currentRetryCount, int maxRetryCount, DispatchResult result) {
         if (result.isSuccess()) {
             return new QueueRowStateUpdate(rowId, ProcessStatus.COMPLETED, currentRetryCount);
         }
         return onFailure(rowId, currentRetryCount, maxRetryCount);
     }
 
-    public QueueRowStateUpdate onKafkaPublishResult(long rowId, int currentRetryCount, int maxRetryCount, DispatchResult result) {
+    public QueueRowStateUpdate onKafkaPublishResult(String rowId, int currentRetryCount, int maxRetryCount, DispatchResult result) {
         if (result.isSuccess()) {
             return new QueueRowStateUpdate(rowId, ProcessStatus.PUBLISHED, currentRetryCount);
         }
         return onFailure(rowId, currentRetryCount, maxRetryCount);
     }
 
-    private QueueRowStateUpdate onFailure(long rowId, int currentRetryCount, int maxRetryCount) {
+    private QueueRowStateUpdate onFailure(String rowId, int currentRetryCount, int maxRetryCount) {
         int nextRetryCount = currentRetryCount + 1;
         if (nextRetryCount < maxRetryCount) {
             return new QueueRowStateUpdate(rowId, ProcessStatus.RETRY, nextRetryCount);
@@ -30,7 +30,7 @@ public class QueueRowStateTransitionService {
         return new QueueRowStateUpdate(rowId, ProcessStatus.DLQ, nextRetryCount);
     }
 
-    public QueueRowStateUpdate validationFailure(long rowId, int currentRetryCount) {
+    public QueueRowStateUpdate validationFailure(String rowId, int currentRetryCount) {
         return new QueueRowStateUpdate(rowId, ProcessStatus.DLQ, currentRetryCount);
     }
 }

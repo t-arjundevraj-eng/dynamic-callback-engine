@@ -7,17 +7,17 @@ import java.util.Map;
  */
 public class PendingQueueRow {
 
-    private final long rowId;
+    private final String rowId;
     private final int retryCount;
     private final Map<String, Object> fields;
 
-    public PendingQueueRow(long rowId, int retryCount, Map<String, Object> fields) {
+    public PendingQueueRow(String rowId, int retryCount, Map<String, Object> fields) {
         this.rowId = rowId;
         this.retryCount = retryCount;
         this.fields = fields;
     }
 
-    public long getRowId() {
+    public String getRowId() {
         return rowId;
     }
 

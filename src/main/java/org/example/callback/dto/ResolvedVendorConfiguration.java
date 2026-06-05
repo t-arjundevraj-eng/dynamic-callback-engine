@@ -12,6 +12,8 @@ public class ResolvedVendorConfiguration {
 
     private final int vendorId;
     private final String vendorName;
+    private final String username;
+    private final String password;
     private final String circle;
     private final String callbackUrl;
     private final String channelUrl;
@@ -25,11 +27,14 @@ public class ResolvedVendorConfiguration {
     private final Set<String> allowedOperatorIds;
     private final Set<String> allowedPackIds;
     private final Set<String> allowedIpAddresses;
+    private final Set<String> allowedNotificationStatuses;
     private final List<VendorParamDefinition> paramDefinitions;
 
     public ResolvedVendorConfiguration(
             int vendorId,
             String vendorName,
+            String username,
+            String password,
             String circle,
             String callbackUrl,
             String channelUrl,
@@ -43,9 +48,12 @@ public class ResolvedVendorConfiguration {
             Set<String> allowedOperatorIds,
             Set<String> allowedPackIds,
             Set<String> allowedIpAddresses,
+            Set<String> allowedNotificationStatuses,
             List<VendorParamDefinition> paramDefinitions) {
         this.vendorId = vendorId;
         this.vendorName = vendorName;
+        this.username = username;
+        this.password = password;
         this.circle = circle;
         this.callbackUrl = callbackUrl;
         this.channelUrl = channelUrl;
@@ -59,6 +67,8 @@ public class ResolvedVendorConfiguration {
         this.allowedOperatorIds = Collections.unmodifiableSet(new LinkedHashSet<>(allowedOperatorIds));
         this.allowedPackIds = Collections.unmodifiableSet(new LinkedHashSet<>(allowedPackIds));
         this.allowedIpAddresses = Collections.unmodifiableSet(new LinkedHashSet<>(allowedIpAddresses));
+        this.allowedNotificationStatuses = Collections.unmodifiableSet(
+                new LinkedHashSet<>(allowedNotificationStatuses));
         this.paramDefinitions = Collections.unmodifiableList(paramDefinitions);
     }
 
@@ -68,6 +78,14 @@ public class ResolvedVendorConfiguration {
 
     public String getVendorName() {
         return vendorName;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public String getPassword() {
+        return password;
     }
 
     public String getCircle() {
@@ -120,6 +138,10 @@ public class ResolvedVendorConfiguration {
 
     public Set<String> getAllowedIpAddresses() {
         return allowedIpAddresses;
+    }
+
+    public Set<String> getAllowedNotificationStatuses() {
+        return allowedNotificationStatuses;
     }
 
     public List<VendorParamDefinition> getParamDefinitions() {

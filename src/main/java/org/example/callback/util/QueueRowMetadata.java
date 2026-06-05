@@ -13,20 +13,21 @@ public final class QueueRowMetadata {
     }
 
     public static PendingQueueRow fromRow(Map<String, Object> row) {
-        long id = requireLong(row, ID);
+        String id = requireString(row, ID);
         int retryCount = intValue(row, RETRY_COUNT, 0);
         return new PendingQueueRow(id, retryCount, row);
     }
 
-    private static long requireLong(Map<String, Object> row, String column) {
+    private static String requireString(Map<String, Object> row, String column) {
         Object value = getIgnoreCase(row, column);
         if (value == null) {
             throw new IllegalArgumentException("Source row is missing required column: " + column);
         }
-        if (value instanceof Number) {
-            return ((Number) value).longValue();
+        String text = String.valueOf(value).trim();
+        if (text.isEmpty()) {
+            throw new IllegalArgumentException("Source row has empty required column: " + column);
         }
-        return Long.parseLong(String.valueOf(value));
+        return text;
     }
 
     private static int intValue(Map<String, Object> row, String column, int defaultValue) {

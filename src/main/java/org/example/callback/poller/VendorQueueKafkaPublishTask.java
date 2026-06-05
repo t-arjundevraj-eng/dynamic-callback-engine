@@ -99,7 +99,7 @@ public class VendorQueueKafkaPublishTask implements Runnable {
                 continue;
             }
 
-            final long rowId = pendingRow.getRowId();
+            final String rowId = pendingRow.getRowId();
             final int retryCount = pendingRow.getRetryCount();
 
             CompletableFuture<QueueRowStateUpdate> stateFuture = kafkaPublisher

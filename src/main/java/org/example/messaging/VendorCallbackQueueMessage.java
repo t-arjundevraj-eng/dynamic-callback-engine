@@ -12,7 +12,7 @@ public class VendorCallbackQueueMessage {
     private String queueName;
     private String sourceTableName;
     private String vendorName;
-    private long rowId;
+    private String rowId;
     private int retryCount;
     private Map<String, Object> row = new LinkedHashMap<String, Object>();
 
@@ -24,7 +24,7 @@ public class VendorCallbackQueueMessage {
             String queueName,
             String sourceTableName,
             String vendorName,
-            long rowId,
+            String rowId,
             int retryCount,
             Map<String, Object> row) {
         this.queueId = queueId;
@@ -68,11 +68,11 @@ public class VendorCallbackQueueMessage {
         this.vendorName = vendorName;
     }
 
-    public long getRowId() {
+    public String getRowId() {
         return rowId;
     }
 
-    public void setRowId(long rowId) {
+    public void setRowId(String rowId) {
         this.rowId = rowId;
     }
 

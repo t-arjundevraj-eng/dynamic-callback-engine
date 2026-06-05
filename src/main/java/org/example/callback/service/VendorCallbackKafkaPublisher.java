@@ -26,7 +26,7 @@ public class VendorCallbackKafkaPublisher {
 
     public CompletableFuture<DispatchResult> publishAsync(
             ResolvedVendorConfiguration configuration,
-            long rowId,
+            String rowId,
             int retryCount,
             Map<String, Object> row) {
         VendorCallbackQueueMessage message = new VendorCallbackQueueMessage(

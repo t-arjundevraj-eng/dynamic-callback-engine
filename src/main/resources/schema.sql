@@ -65,9 +65,32 @@ CREATE TABLE IF NOT EXISTS vendor_callback_queue_config (
 CREATE TABLE IF NOT EXISTS sm_vendor_master (
     vendor_id INT NOT NULL AUTO_INCREMENT,
     vendor_name VARCHAR(50) NOT NULL,
+    username VARCHAR(50) DEFAULT NULL,
+    password VARCHAR(50) DEFAULT NULL,
     isCallback_active TINYINT(1) NOT NULL DEFAULT 0,
     PRIMARY KEY (vendor_id),
     UNIQUE KEY uk_sm_vendor_master_name (vendor_name)
+);
+
+CREATE TABLE IF NOT EXISTS sm_vendor_notification_config (
+    id INT NOT NULL AUTO_INCREMENT,
+    module VARCHAR(64) NOT NULL,
+    vendor INT NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    PRIMARY KEY (id),
+    KEY idx_vendor_notification (module, vendor)
+);
+
+CREATE TABLE IF NOT EXISTS sm_user_registration_vodacom (
+    id INT NOT NULL AUTO_INCREMENT,
+    msisdn VARCHAR(50) NOT NULL,
+    pack_name VARCHAR(50) NOT NULL,
+    circle VARCHAR(50) NOT NULL,
+    param1 VARCHAR(255) DEFAULT NULL,
+    param2 VARCHAR(255) DEFAULT NULL,
+    param3 VARCHAR(255) DEFAULT NULL,
+    PRIMARY KEY (id),
+    KEY idx_user_reg_lookup (msisdn, pack_name, circle)
 );
 
 CREATE TABLE IF NOT EXISTS sm_vendor_operator_mapping (
@@ -101,6 +124,7 @@ CREATE TABLE IF NOT EXISTS sm_vendor_callback_config (
     vendor_id INT NOT NULL,
     callback_url VARCHAR(512) NOT NULL,
     circle VARCHAR(50) DEFAULT NULL,
+    http_method VARCHAR(10) DEFAULT 'GET',
     channel_url VARCHAR(512) DEFAULT NULL,
     other_url VARCHAR(512) DEFAULT NULL,
     PRIMARY KEY (id),
@@ -136,7 +160,7 @@ CREATE TABLE IF NOT EXISTS vendor_callback_queue_one97_tanzania (
     next_retry_time DATETIME DEFAULT NULL,
     retry_count INT NOT NULL DEFAULT 0,
     operator VARCHAR(50) DEFAULT NULL,
-    callback_status VARCHAR(20) NOT NULL DEFAULT 'NEW',
+    callback_status VARCHAR(20) NOT NULL DEFAULT '0',
     request_time DATETIME DEFAULT NULL,
     updation_time DATETIME DEFAULT NULL,
     params VARCHAR(512) DEFAULT NULL,
@@ -166,7 +190,7 @@ CREATE TABLE IF NOT EXISTS vendor_callback_queue_paytmchemba (
     next_retry_time DATETIME DEFAULT NULL,
     retry_count INT NOT NULL DEFAULT 0,
     operator VARCHAR(50) DEFAULT NULL,
-    callback_status VARCHAR(20) NOT NULL DEFAULT 'NEW',
+    callback_status VARCHAR(20) NOT NULL DEFAULT '0',
     request_time DATETIME DEFAULT NULL,
     updation_time DATETIME DEFAULT NULL,
     params VARCHAR(512) DEFAULT NULL,
@@ -180,42 +204,60 @@ INSERT IGNORE INTO vendor_callback_queue_config
  producer_sleep_time, consumer_sleep_time, status, vendor_circle_flag,
  vendor_name, circle_name, max_retry_count, table_name)
 VALUES
-('queue_callback_one97', 12, 1000, 1000, 50, 5000, 60000, 1, 1, 'one97', 'tanzania', 3,
+('queue_callback_one97_tanzania', 12, 1000, 1000, 50, 5000, 60000, 1, 1, 'one97', 'tanzania', 3,
  'vendor_callback_queue_one97_tanzania'),
 ('queue_callback_paytmchemba', 12, 1000, 1000, 50, 5000, 60000, 1, 0, 'paytmchemba', NULL, 3,
  'vendor_callback_queue_paytmchemba');
 
-INSERT IGNORE INTO sm_vendor_master (vendor_name, isCallback_active) VALUES ('one97', 1);
-INSERT IGNORE INTO sm_vendor_master (vendor_name, isCallback_active) VALUES ('paytmchemba', 1);
+INSERT IGNORE INTO sm_vendor_master (vendor_name, username, password, isCallback_active)
+VALUES ('one97', NULL, NULL, 1);
+INSERT IGNORE INTO sm_vendor_master (vendor_name, username, password, isCallback_active)
+VALUES ('paytmchemba', NULL, NULL, 1);
+
+INSERT IGNORE INTO sm_vendor_notification_config (module, vendor, status)
+SELECT 'CallbackManagement', vendor_id, '0' FROM sm_vendor_master WHERE vendor_name = 'one97';
+INSERT IGNORE INTO sm_vendor_notification_config (module, vendor, status)
+SELECT 'CallbackManagement', vendor_id, '0' FROM sm_vendor_master WHERE vendor_name = 'paytmchemba';
 
 INSERT IGNORE INTO sm_vendor_operator_mapping (vendor_id, operator_id)
-SELECT vendor_id, 'OP1' FROM sm_vendor_master WHERE vendor_name = 'one97';
+SELECT vendor_id, 'vodacom' FROM sm_vendor_master WHERE vendor_name = 'one97';
 INSERT IGNORE INTO sm_vendor_operator_mapping (vendor_id, operator_id)
 SELECT vendor_id, 'OP1' FROM sm_vendor_master WHERE vendor_name = 'paytmchemba';
 
 INSERT IGNORE INTO sm_vendor_pack (vendor_id, pack_id, is_active)
-SELECT vendor_id, 'PACK1', 1 FROM sm_vendor_master WHERE vendor_name = 'one97';
+SELECT vendor_id, 'normalcrbt', 1 FROM sm_vendor_master WHERE vendor_name = 'one97';
 INSERT IGNORE INTO sm_vendor_pack (vendor_id, pack_id, is_active)
 SELECT vendor_id, 'PACK1', 1 FROM sm_vendor_master WHERE vendor_name = 'paytmchemba';
 
-INSERT IGNORE INTO sm_vendor_callback_config (vendor_id, circle, callback_url, channel_url, other_url)
-SELECT vendor_id, 'tanzania', 'http://localhost:8080/actuator/health', NULL, NULL
+INSERT IGNORE INTO sm_vendor_callback_config (vendor_id, circle, callback_url, http_method, channel_url, other_url)
+SELECT vendor_id, 'tanzania',
+       'http://172.18.229.23:8080/PRBTModule/internal/prbtNotify',
+       'GET', NULL, NULL
 FROM sm_vendor_master WHERE vendor_name = 'one97';
 
-INSERT IGNORE INTO sm_vendor_callback_config (vendor_id, circle, callback_url, channel_url, other_url)
-SELECT vendor_id, 'default', 'http://localhost:8080/actuator/health', NULL, NULL
+INSERT IGNORE INTO sm_vendor_callback_config (vendor_id, circle, callback_url, http_method, channel_url, other_url)
+SELECT vendor_id, 'default', 'http://localhost:8080/actuator/health', 'GET', NULL, NULL
 FROM sm_vendor_master WHERE vendor_name = 'paytmchemba';
 
-INSERT IGNORE INTO sm_vendor_param_configuration (vendor_name, circle_name, param) 
-VALUES ('one97', 'tanzania', 'event_id,customer_id,amount');
+INSERT IGNORE INTO sm_vendor_param_configuration (vendor_name, circle_name, param)
+VALUES ('one97', 'tanzania', 'start_date,end_date,sourceApp,starting_date,param1,param2,param3,language');
 
-INSERT IGNORE INTO sm_vendor_param_configuration (vendor_name, circle_name, param) 
-VALUES ('paytmchemba', 'default', 'transaction_id,msisdn,amount');
+INSERT IGNORE INTO sm_vendor_param_configuration (vendor_name, circle_name, param)
+VALUES ('paytmchemba', 'default', 'transaction_id,msisdn,price_point_charged');
 
-INSERT IGNORE INTO vendor_callback_queue_one97_tanzania 
-(callback_status, retry_count, operator, pack_name, request_id, msisdn, price_point_charged) 
-VALUES ('NEW', 0, 'OP1', 'PACK1', 'evt-one97-1', 'cust-100', '99.50');
+INSERT IGNORE INTO sm_user_registration_vodacom (msisdn, pack_name, circle, param1, param2, param3)
+VALUES ('255795237021', 'normalcrbt', 'tanzania', '', '', 'NA$$ee6743df246146cf939b');
 
-INSERT IGNORE INTO vendor_callback_queue_paytmchemba 
-(request_id, callback_status, retry_count, operator, pack_name, transaction_id, msisdn, price_point_charged) 
-VALUES ('99999', 'NEW', 0, 'OP1', 'PACK1', 'txn-paytm-1', '255700000001', '1500.00');
+INSERT IGNORE INTO vendor_callback_queue_one97_tanzania
+(callback_status, retry_count, next_retry_time, operator, pack_name, request_id, msisdn,
+ price_point_charged, transaction_id, action, channel, status, circle, vendor_name,
+ start_date, end_date, request_time, info)
+VALUES
+('0', 0, NOW(), 'vodacom', 'normalcrbt', '167', '255795237021', '30.0', '145',
+ 'Subscription', 'SMS', '0', 'tanzania', 'one97',
+ '2026-06-02 14:20:19', '2026-06-03 14:20:20', '2026-06-02 14:20:19', 'English');
+
+INSERT IGNORE INTO vendor_callback_queue_paytmchemba
+(request_id, callback_status, retry_count, next_retry_time, operator, pack_name,
+ transaction_id, msisdn, price_point_charged, status)
+VALUES ('99999', '0', 0, NOW(), 'OP1', 'PACK1', 'txn-paytm-1', '255700000001', '1500.00', '0');

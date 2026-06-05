@@ -34,7 +34,8 @@ public class VendorSourceQueueJdbcRepository {
         int limit = Math.max(1, fetchSize);
         String sql = "SELECT * FROM " + safeTable
                 + " WHERE " + SqlIdentifier.columnName(STATUS_COLUMN) + " IN (?, ?)"
-                + " ORDER BY " + SqlIdentifier.columnName(ID_COLUMN) // Updated to use ID_COLUMN constant
+                + " AND (next_retry_time IS NULL OR next_retry_time <= NOW())"
+                + " ORDER BY " + SqlIdentifier.columnName(ID_COLUMN)
                 + " LIMIT " + limit;
         return jdbcTemplate.queryForList(sql, ProcessStatus.NEW, ProcessStatus.RETRY);
     }
@@ -56,7 +57,7 @@ public class VendorSourceQueueJdbcRepository {
                 QueueRowStateUpdate update = updates.get(i);
                 ps.setString(1, update.getProcessStatus());
                 ps.setInt(2, update.getRetryCount());
-                ps.setLong(3, update.getRowId());
+                ps.setString(3, update.getRowId());
             }
 
             @Override
