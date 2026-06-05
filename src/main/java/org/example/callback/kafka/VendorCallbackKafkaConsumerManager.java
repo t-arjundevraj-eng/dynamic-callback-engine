@@ -117,10 +117,10 @@ public class VendorCallbackKafkaConsumerManager implements SmartLifecycle {
     }
 
     private void createTopic(VendorCallbackQueueConfig queue) {
-        AppProperties.Kafka kafka = appProperties.getKafka();
+        int partitions = Math.max(1, callbackProperties.getCallbackTopicPartitions());
         NewTopic topic = TopicBuilder.name(queue.getQueueName())
-                .partitions(kafka.getPartitions())
-                .replicas(kafka.getReplicas())
+                .partitions(partitions)
+                .replicas(appProperties.getKafka().getReplicas())
                 .build();
         kafkaAdmin.createOrModifyTopics(topic);
     }
@@ -159,10 +159,11 @@ public class VendorCallbackKafkaConsumerManager implements SmartLifecycle {
     }
 
     private int concurrency(VendorCallbackQueueConfig queue) {
-        if (queue.getConsPoolSize() != null && queue.getConsPoolSize() > 0) {
-            return queue.getConsPoolSize();
-        }
-        return 1;
+        int maxPartitions = Math.max(1, callbackProperties.getCallbackTopicPartitions());
+        int requested = queue.getConsPoolSize() != null && queue.getConsPoolSize() > 0
+                ? queue.getConsPoolSize()
+                : 1;
+        return Math.min(requested, maxPartitions);
     }
 
     private int fetchSize(VendorCallbackQueueConfig queue) {

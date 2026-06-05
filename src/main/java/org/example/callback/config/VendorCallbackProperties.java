@@ -15,6 +15,7 @@ public class VendorCallbackProperties {
     private int dispatchCorePoolSize = 50;
     private int dispatchMaxPoolSize = 100;
     private int dispatchQueueCapacity = 1_000;
+    private int callbackTopicPartitions = 1;
 
     public boolean isEnabled() {
         return enabled;
@@ -94,5 +95,13 @@ public class VendorCallbackProperties {
 
     public void setDispatchQueueCapacity(int dispatchQueueCapacity) {
         this.dispatchQueueCapacity = dispatchQueueCapacity;
+    }
+
+    public int getCallbackTopicPartitions() {
+        return callbackTopicPartitions;
+    }
+
+    public void setCallbackTopicPartitions(int callbackTopicPartitions) {
+        this.callbackTopicPartitions = callbackTopicPartitions;
     }
 }
