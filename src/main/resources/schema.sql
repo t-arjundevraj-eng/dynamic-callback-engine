@@ -124,7 +124,6 @@ CREATE TABLE IF NOT EXISTS sm_vendor_callback_config (
     vendor_id INT NOT NULL,
     callback_url VARCHAR(512) NOT NULL,
     circle VARCHAR(50) DEFAULT NULL,
-    http_method VARCHAR(10) DEFAULT 'GET',
     channel_url VARCHAR(512) DEFAULT NULL,
     other_url VARCHAR(512) DEFAULT NULL,
     PRIMARY KEY (id),
@@ -209,10 +208,8 @@ VALUES
 ('queue_callback_paytmchemba', 12, 1000, 1000, 50, 5000, 60000, 1, 0, 'paytmchemba', NULL, 3,
  'vendor_callback_queue_paytmchemba');
 
-INSERT IGNORE INTO sm_vendor_master (vendor_name, username, password, isCallback_active)
-VALUES ('one97', NULL, NULL, 1);
-INSERT IGNORE INTO sm_vendor_master (vendor_name, username, password, isCallback_active)
-VALUES ('paytmchemba', NULL, NULL, 1);
+INSERT IGNORE INTO sm_vendor_master (vendor_name, isCallback_active) VALUES ('one97', 1);
+INSERT IGNORE INTO sm_vendor_master (vendor_name, isCallback_active) VALUES ('paytmchemba', 1);
 
 INSERT IGNORE INTO sm_vendor_notification_config (module, vendor, status)
 SELECT 'CallbackManagement', vendor_id, '0' FROM sm_vendor_master WHERE vendor_name = 'one97';
@@ -229,14 +226,14 @@ SELECT vendor_id, 'normalcrbt', 1 FROM sm_vendor_master WHERE vendor_name = 'one
 INSERT IGNORE INTO sm_vendor_pack (vendor_id, pack_id, is_active)
 SELECT vendor_id, 'PACK1', 1 FROM sm_vendor_master WHERE vendor_name = 'paytmchemba';
 
-INSERT IGNORE INTO sm_vendor_callback_config (vendor_id, circle, callback_url, http_method, channel_url, other_url)
+INSERT IGNORE INTO sm_vendor_callback_config (vendor_id, circle, callback_url, channel_url, other_url)
 SELECT vendor_id, 'tanzania',
        'http://172.18.229.23:8080/PRBTModule/internal/prbtNotify',
-       'GET', NULL, NULL
+       NULL, NULL
 FROM sm_vendor_master WHERE vendor_name = 'one97';
 
-INSERT IGNORE INTO sm_vendor_callback_config (vendor_id, circle, callback_url, http_method, channel_url, other_url)
-SELECT vendor_id, 'default', 'http://localhost:8080/actuator/health', 'GET', NULL, NULL
+INSERT IGNORE INTO sm_vendor_callback_config (vendor_id, circle, callback_url, channel_url, other_url)
+SELECT vendor_id, 'default', 'http://localhost:8080/actuator/health', NULL, NULL
 FROM sm_vendor_master WHERE vendor_name = 'paytmchemba';
 
 INSERT IGNORE INTO sm_vendor_param_configuration (vendor_name, circle_name, param)

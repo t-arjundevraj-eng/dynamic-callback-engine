@@ -27,7 +27,7 @@ public class VendorConfigurationJdbcRepository {
                     + "vcc.circle AS circle, "
                     + "vcc.callback_url AS callbackUrl, "
                     + "vcc.channel_url AS channelUrl, "
-                    + "COALESCE(vcc.http_method, 'GET') AS httpMethod, "
+                    + "'GET' AS httpMethod, "
                     + "vqc.queue_id AS queueId, "
                     + "vqc.queue_name AS queueName, "
                     + "vqc.table_name AS sourceTableName, "
